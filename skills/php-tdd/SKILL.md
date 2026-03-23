@@ -79,7 +79,7 @@ If the composer coverage command is not available, this is the excerpt from a `c
      ]
 ```
 
-The check-coverage.php script is
+The check-coverage.php script is available below and can be copied into the project if needed:
 ```php
 <?php
 
