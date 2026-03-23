@@ -50,7 +50,7 @@ Run `skills-ref validate` to check all skills for missing or malformed frontmatt
 
 ## Packaging
 
-Create a zip per skill with the skill directory as the root inside the archive:
+Create a zip per skill with the skill directory as the root inside the archive.
 
 ```sh
 python3 -c "
@@ -61,4 +61,4 @@ with zipfile.ZipFile(f'{name}.zip', 'w') as z:
 "
 ```
 
-Zip files are excluded from git (see `.gitignore`).
+Zip files are excluded from git (see `.gitignore`), and can be uploaded to https://claude.ai/customize/skills to make them available to Claude AI.
