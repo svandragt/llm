@@ -1,6 +1,6 @@
 ---
 name: python-tdd
-description: Run a red-green TDD cycle for Python projects using pytest: confirm baseline green, write a failing test, implement minimum code, confirm green, then lint with ruff.
+description: "Run a red-green TDD cycle for Python projects using pytest: confirm baseline green, write a failing test, implement minimum code, confirm green, then lint with ruff."
 ---
 
 Run a red-green TDD cycle for the current task:

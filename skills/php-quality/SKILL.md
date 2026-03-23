@@ -1,6 +1,6 @@
 ---
 name: php-quality
-description: Run the full PHP quality gate: auto-fix linting, check coding standards, run static analysis, run unit tests, and verify coverage threshold.
+description: "Run the full PHP quality gate: auto-fix linting, check coding standards, run static analysis, run unit tests, and verify coverage threshold."
 ---
 
 Run the full quality pipeline for a PHP project in this order. Stop and fix any failures before proceeding to the next step.
