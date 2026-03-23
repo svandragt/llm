@@ -3,7 +3,7 @@ name: smoke-test
 description: Build a Showboat smoke-test document proving a new feature works end-to-end by seeding the database, running the dev server, exercising the endpoint, and verifying reproducibility.
 ---
 
-Build a Showboat smoke-test document proving a new feature works:
+Build a [Showboat](https://simonwillison.net/2026/Feb/10/showboat-and-rodney/) smoke-test document proving a new feature works:
 
 1. `uvx showboat init demo.md "<feature name>"`
 2. Seed the database:
