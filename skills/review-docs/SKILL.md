@@ -9,9 +9,9 @@ You are reviewing project documentation after a user-facing change. Follow these
 
 Identify what was added, changed, or removed that users would interact with. Look at recently edited files or the task description for context.
 
-## 2. Scan docs/
+## 2. Scan for a docs directory such as docs/
 
-List all files in the `docs/` directory. Read the titles and introductory paragraphs to understand what each page covers.
+List all files in the documentation folder, such as a `docs/` directory. Read the titles and introductory paragraphs to understand what each page covers.
 
 ## 3. Find Related Pages
 
