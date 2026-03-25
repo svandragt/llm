@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HAR Diff Tool</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: monospace;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 12px 20px;
+      background: #252526;
+      border-bottom: 1px solid #3e3e3e;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    header h1 { font-size: 1rem; color: #cccccc; font-weight: 600; }
+
+    .drop-zone-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: #3e3e3e;
+      border-bottom: 1px solid #3e3e3e;
+    }
+
+    .drop-zone {
+      background: #252526;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.15s;
+      min-height: 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .drop-zone:hover, .drop-zone.over { background: #2d2d2d; }
+    .drop-zone.loaded { background: #1e2d1e; }
+
+    .drop-zone .label { font-size: 0.75rem; color: #888; }
+    .drop-zone .filename { font-size: 0.85rem; color: #4ec9b0; }
+    .drop-zone input { display: none; }
+
+    .controls {
+      padding: 10px 20px;
+      background: #252526;
+      border-bottom: 1px solid #3e3e3e;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .controls label { font-size: 0.8rem; color: #888; display: flex; align-items: center; gap: 6px; }
+    .controls input[type=checkbox] { accent-color: #569cd6; }
+
+    .controls select {
+      background: #3c3c3c;
+      border: 1px solid #555;
+      color: #d4d4d4;
+      padding: 3px 8px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      border-radius: 3px;
+    }
+
+    .filter-input {
+      background: #3c3c3c;
+      border: 1px solid #555;
+      color: #d4d4d4;
+      padding: 3px 8px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      border-radius: 3px;
+      width: 200px;
+    }
+
+    .filter-input::placeholder { color: #666; }
+
+    .summary {
+      padding: 8px 20px;
+      background: #1e1e1e;
+      border-bottom: 1px solid #3e3e3e;
+      font-size: 0.78rem;
+      color: #888;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .summary span { display: flex; align-items: center; gap: 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-added { background: #4ec9b0; }
+    .dot-removed { background: #f44747; }
+    .dot-changed { background: #dcdcaa; }
+    .dot-same { background: #555; }
+
+    #results {
+      flex: 1;
+      overflow: auto;
+    }
+
+    .empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: #555;
+      font-size: 0.85rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #2d2d2d;
+      padding: 6px 10px;
+      text-align: left;
+      font-weight: 600;
+      color: #999;
+      border-bottom: 1px solid #3e3e3e;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    thead th:hover { background: #353535; }
+    thead th.sorted { color: #569cd6; }
+
+    tbody tr { border-bottom: 1px solid #2a2a2a; cursor: pointer; }
+    tbody tr:hover { background: #2a2a2a; }
+
+    tbody tr.added   { background: #0d2211; }
+    tbody tr.removed { background: #250d0d; }
+    tbody tr.changed { background: #1e1e0a; }
+    tbody tr.same    { }
+
+    tbody tr.added:hover   { background: #122b17; }
+    tbody tr.removed:hover { background: #2e1010; }
+    tbody tr.changed:hover { background: #272710; }
+    tbody tr.same:hover    { background: #2a2a2a; }
+
+    td { padding: 5px 10px; vertical-align: top; }
+
+    .badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-added   { background: #0e3320; color: #4ec9b0; }
+    .badge-removed { background: #3e0d0d; color: #f44747; }
+    .badge-changed { background: #2e2a00; color: #dcdcaa; }
+    .badge-same    { background: #2a2a2a; color: #777; }
+
+    .method {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    .method-GET    { color: #4ec9b0; }
+    .method-POST   { color: #569cd6; }
+    .method-PUT    { color: #dcdcaa; }
+    .method-DELETE { color: #f44747; }
+    .method-PATCH  { color: #ce9178; }
+
+    .status-ok  { color: #4ec9b0; }
+    .status-redir { color: #dcdcaa; }
+    .status-err { color: #f44747; }
+
+    .url-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9cdcfe; }
+    .num-cell { text-align: right; white-space: nowrap; }
+
+    .diff-val { display: flex; gap: 6px; align-items: baseline; white-space: nowrap; }
+    .diff-old { color: #f44747; text-decoration: line-through; }
+    .diff-new { color: #4ec9b0; }
+    .diff-arrow { color: #555; }
+
+    /* Detail panel */
+    .detail-panel {
+      position: fixed;
+      right: 0; top: 0; bottom: 0;
+      width: 520px;
+      background: #1e1e1e;
+      border-left: 1px solid #3e3e3e;
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+    }
+
+    .detail-panel.open { transform: translateX(0); }
+
+    .detail-header {
+      padding: 10px 14px;
+      background: #252526;
+      border-bottom: 1px solid #3e3e3e;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .detail-header .url { font-size: 0.78rem; color: #9cdcfe; word-break: break-all; flex: 1; }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .close-btn:hover { color: #d4d4d4; }
+
+    .detail-tabs {
+      display: flex;
+      gap: 0;
+      background: #252526;
+      border-bottom: 1px solid #3e3e3e;
+    }
+
+    .detail-tab {
+      padding: 6px 14px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      color: #888;
+      border-bottom: 2px solid transparent;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      font-family: monospace;
+    }
+
+    .detail-tab:hover { color: #d4d4d4; }
+    .detail-tab.active { color: #569cd6; border-bottom-color: #569cd6; }
+
+    .detail-body {
+      flex: 1;
+      overflow: auto;
+      padding: 14px;
+    }
+
+    .diff-block {
+      margin-bottom: 14px;
+    }
+
+    .diff-block h4 {
+      font-size: 0.72rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .diff-line {
+      display: grid;
+      grid-template-columns: 120px 1fr 1fr;
+      gap: 8px;
+      padding: 3px 0;
+      border-bottom: 1px solid #2a2a2a;
+      font-size: 0.75rem;
+      align-items: baseline;
+    }
+
+    .diff-line .key { color: #9cdcfe; }
+    .diff-line .val-a { color: #f44747; }
+    .diff-line .val-b { color: #4ec9b0; }
+    .diff-line .val-same { color: #d4d4d4; grid-column: 2 / 4; }
+
+    pre.body-diff {
+      background: #0d0d0d;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #d4d4d4;
+    }
+
+    .line-added   { background: #0d2211; color: #4ec9b0; }
+    .line-removed { background: #250d0d; color: #f44747; }
+
+    .no-diff { color: #555; font-size: 0.78rem; padding: 10px 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>HAR Diff</h1>
+</header>
+
+<div class="drop-zone-row">
+  <div class="drop-zone" id="zone-a" onclick="document.getElementById('file-a').click()">
+    <input type="file" id="file-a" accept=".har,application/json">
+    <span class="label">File A (baseline) — drop or click</span>
+    <span class="filename" id="name-a"></span>
+  </div>
+  <div class="drop-zone" id="zone-b" onclick="document.getElementById('file-b').click()">
+    <input type="file" id="file-b" accept=".har,application/json">
+    <span class="label">File B (compare) — drop or click</span>
+    <span class="filename" id="name-b"></span>
+  </div>
+</div>
+
+<div class="controls">
+  <label><input type="checkbox" id="show-same" checked> Same</label>
+  <label><input type="checkbox" id="show-changed" checked> Changed</label>
+  <label><input type="checkbox" id="show-added" checked> Added</label>
+  <label><input type="checkbox" id="show-removed" checked> Removed</label>
+  <span style="color:#555">|</span>
+  <label>Group by <select id="group-by">
+    <option value="none">None</option>
+    <option value="host">Host</option>
+    <option value="status">Status</option>
+  </select></label>
+  <span style="color:#555">|</span>
+  <input type="text" class="filter-input" id="url-filter" placeholder="Filter URL…">
+</div>
+
+<div class="summary" id="summary" style="display:none"></div>
+
+<div id="results"><div class="empty-state">Load two HAR files to compare</div></div>
+
+<div class="detail-panel" id="detail-panel">
+  <div class="detail-header">
+    <span class="url" id="detail-url"></span>
+    <button class="close-btn" onclick="closeDetail()">✕</button>
+  </div>
+  <div class="detail-tabs">
+    <button class="detail-tab active" onclick="switchTab('overview')">Overview</button>
+    <button class="detail-tab" onclick="switchTab('headers')">Headers</button>
+    <button class="detail-tab" onclick="switchTab('body')">Body</button>
+    <button class="detail-tab" onclick="switchTab('timings')">Timings</button>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</div>
+
+<script>
+'use strict';
+
+let harA = null, harB = null;
+let diffRows = [];
+let currentRow = null;
+let currentTab = 'overview';
+let sortCol = null, sortDir = 1;
+
+// ── File loading ──────────────────────────────────────────────────────────────
+
+function setupDrop(zoneId, fileId, slot) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(fileId);
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('over');
+    const file = e.dataTransfer.files[0];
+    if (file) loadFile(file, slot);
+  });
+
+  input.addEventListener('change', () => {
+    if (input.files[0]) loadFile(input.files[0], slot);
+  });
+}
+
+function loadFile(file, slot) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.log || !data.log.entries) throw new Error('Not a valid HAR file');
+      if (slot === 'a') {
+        harA = data;
+        document.getElementById('name-a').textContent = file.name;
+        document.getElementById('zone-a').classList.add('loaded');
+      } else {
+        harB = data;
+        document.getElementById('name-b').textContent = file.name;
+        document.getElementById('zone-b').classList.add('loaded');
+      }
+      if (harA && harB) runDiff();
+    } catch(err) {
+      alert('Error loading ' + file.name + ': ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+setupDrop('zone-a', 'file-a', 'a');
+setupDrop('zone-b', 'file-b', 'b');
+
+// ── HAR helpers ───────────────────────────────────────────────────────────────
+
+function entryKey(entry) {
+  const req = entry.request;
+  return req.method + ' ' + req.url;
+}
+
+function getHost(url) {
+  try { return new URL(url).hostname; } catch { return url; }
+}
+
+function getPath(url) {
+  try { const u = new URL(url); return u.pathname + u.search; } catch { return url; }
+}
+
+function statusClass(s) {
+  if (!s || s === 0) return '';
+  if (s < 300) return 'status-ok';
+  if (s < 400) return 'status-redir';
+  return 'status-err';
+}
+
+function fmtMs(n) {
+  if (n == null || n < 0) return '—';
+  return n < 1 ? '<1ms' : Math.round(n) + 'ms';
+}
+
+function fmtBytes(n) {
+  if (n == null || n < 0) return '—';
+  if (n < 1024) return n + 'B';
+  if (n < 1024*1024) return (n/1024).toFixed(1) + 'KB';
+  return (n/(1024*1024)).toFixed(2) + 'MB';
+}
+
+function headersMap(entry, part) {
+  const headers = entry[part] && entry[part].headers || [];
+  const map = {};
+  for (const h of headers) map[h.name.toLowerCase()] = h.value;
+  return map;
+}
+
+function getBody(entry, part) {
+  if (part === 'request') {
+    const pd = entry.request.postData;
+    return pd ? pd.text || '' : '';
+  }
+  const content = entry.response.content;
+  return content ? content.text || '' : '';
+}
+
+// ── Diff engine ───────────────────────────────────────────────────────────────
+
+function runDiff() {
+  const mapA = new Map();
+  const mapB = new Map();
+  for (const e of harA.log.entries) mapA.set(entryKey(e), e);
+  for (const e of harB.log.entries) mapB.set(entryKey(e), e);
+
+  const allKeys = new Set([...mapA.keys(), ...mapB.keys()]);
+  diffRows = [];
+
+  for (const key of allKeys) {
+    const a = mapA.get(key);
+    const b = mapB.get(key);
+
+    if (!a) {
+      diffRows.push({ key, status: 'added', a: null, b });
+    } else if (!b) {
+      diffRows.push({ key, status: 'removed', a, b: null });
+    } else {
+      const changed = detectChanges(a, b);
+      diffRows.push({ key, status: changed ? 'changed' : 'same', a, b, changes: changed });
+    }
+  }
+
+  renderTable();
+  renderSummary();
+}
+
+function detectChanges(a, b) {
+  const changes = {};
+
+  const statusA = a.response.status, statusB = b.response.status;
+  if (statusA !== statusB) changes.status = [statusA, statusB];
+
+  const timeA = a.time, timeB = b.time;
+  if (Math.abs(timeA - timeB) > 1) changes.time = [timeA, timeB];
+
+  const sizeA = a.response.bodySize, sizeB = b.response.bodySize;
+  if (sizeA !== sizeB) changes.bodySize = [sizeA, sizeB];
+
+  const hA = headersMap(a, 'response'), hB = headersMap(b, 'response');
+  const hChanges = {};
+  const allH = new Set([...Object.keys(hA), ...Object.keys(hB)]);
+  for (const h of allH) {
+    if (hA[h] !== hB[h]) hChanges[h] = [hA[h], hB[h]];
+  }
+  if (Object.keys(hChanges).length) changes.responseHeaders = hChanges;
+
+  const bodyA = getBody(a, 'response'), bodyB = getBody(b, 'response');
+  if (bodyA !== bodyB) changes.body = [bodyA, bodyB];
+
+  return Object.keys(changes).length ? changes : null;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+const COLS = [
+  { id: 'status',  label: 'Diff' },
+  { id: 'method',  label: 'Method' },
+  { id: 'url',     label: 'URL' },
+  { id: 'hstatus', label: 'Status' },
+  { id: 'time',    label: 'Time' },
+  { id: 'size',    label: 'Size' },
+];
+
+function renderSummary() {
+  const counts = { added: 0, removed: 0, changed: 0, same: 0 };
+  for (const r of diffRows) counts[r.status]++;
+
+  const el = document.getElementById('summary');
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <span><span class="dot dot-added"></span> Added: ${counts.added}</span>
+    <span><span class="dot dot-removed"></span> Removed: ${counts.removed}</span>
+    <span><span class="dot dot-changed"></span> Changed: ${counts.changed}</span>
+    <span><span class="dot dot-same"></span> Same: ${counts.same}</span>
+    <span style="margin-left:auto;color:#555">Total: ${diffRows.length}</span>
+  `;
+}
+
+function getRowValue(row, col) {
+  const e = row.b || row.a;
+  switch(col) {
+    case 'method':  return e.request.method;
+    case 'url':     return e.request.url;
+    case 'hstatus': return (row.b || row.a).response.status;
+    case 'time':    return e.time;
+    case 'size':    return e.response.bodySize;
+    case 'status':  return row.status;
+    default: return '';
+  }
+}
+
+function renderTable() {
+  const showSame    = document.getElementById('show-same').checked;
+  const showChanged = document.getElementById('show-changed').checked;
+  const showAdded   = document.getElementById('show-added').checked;
+  const showRemoved = document.getElementById('show-removed').checked;
+  const filterText  = document.getElementById('url-filter').value.toLowerCase();
+  const groupBy     = document.getElementById('group-by').value;
+
+  let rows = diffRows.filter(r => {
+    if (!showSame    && r.status === 'same')    return false;
+    if (!showChanged && r.status === 'changed') return false;
+    if (!showAdded   && r.status === 'added')   return false;
+    if (!showRemoved && r.status === 'removed') return false;
+    if (filterText) {
+      const e = r.b || r.a;
+      if (!e.request.url.toLowerCase().includes(filterText)) return false;
+    }
+    return true;
+  });
+
+  if (sortCol) {
+    rows = rows.slice().sort((a, b) => {
+      let va = getRowValue(a, sortCol), vb = getRowValue(b, sortCol);
+      if (typeof va === 'string') va = va.toLowerCase();
+      if (typeof vb === 'string') vb = vb.toLowerCase();
+      if (va < vb) return -sortDir;
+      if (va > vb) return sortDir;
+      return 0;
+    });
+  }
+
+  if (rows.length === 0) {
+    document.getElementById('results').innerHTML = '<div class="empty-state">No matching entries</div>';
+    return;
+  }
+
+  const el = document.getElementById('results');
+
+  if (groupBy === 'none') {
+    el.innerHTML = buildTable(rows);
+  } else {
+    const groups = new Map();
+    for (const r of rows) {
+      const e = r.b || r.a;
+      let key;
+      if (groupBy === 'host') key = getHost(e.request.url);
+      else key = String((r.b || r.a).response.status);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    }
+
+    let html = '';
+    for (const [gkey, grows] of [...groups.entries()].sort()) {
+      html += `<div style="padding:6px 10px 2px;background:#1a1a1a;font-size:0.72rem;color:#888;border-bottom:1px solid #2a2a2a;position:sticky;top:0;z-index:1">${escHtml(gkey)} <span style="color:#555">(${grows.length})</span></div>`;
+      html += buildTable(grows, false);
+    }
+    el.innerHTML = html;
+  }
+
+  el.querySelectorAll('tbody tr').forEach((tr, i) => {
+    const r = rows[i] || tr._row;
+    tr.addEventListener('click', () => openDetail(tr._row));
+    tr._row = rows[parseInt(tr.dataset.idx)];
+  });
+}
+
+function buildTable(rows, withHead = true) {
+  let html = '<table>';
+  if (withHead) {
+    html += '<thead><tr>';
+    for (const c of COLS) {
+      const sorted = sortCol === c.id ? ' sorted' : '';
+      html += `<th class="${sorted}" onclick="setSort('${c.id}')">${c.label}${sortCol===c.id?(sortDir>0?' ↑':' ↓'):''}</th>`;
+    }
+    html += '</tr></thead>';
+  }
+  html += '<tbody>';
+  rows.forEach((r, i) => {
+    const e = r.b || r.a;
+    const method = e.request.method;
+    const url = e.request.url;
+    const path = getPath(url);
+    const statusA = r.a ? r.a.response.status : null;
+    const statusB = r.b ? r.b.response.status : null;
+    const timeA = r.a ? r.a.time : null;
+    const timeB = r.b ? r.b.time : null;
+    const sizeA = r.a ? r.a.response.bodySize : null;
+    const sizeB = r.b ? r.b.response.bodySize : null;
+
+    const statusCell = r.status === 'added' || r.status === 'removed'
+      ? `<span class="${statusClass(statusA||statusB)}">${statusA||statusB||'—'}</span>`
+      : statusA !== statusB
+        ? `<span class="diff-old">${statusA}</span> <span class="diff-arrow">→</span> <span class="diff-new">${statusB}</span>`
+        : `<span class="${statusClass(statusB)}">${statusB||'—'}</span>`;
+
+    const timeCell = r.status === 'same' || r.status === 'added' || r.status === 'removed'
+      ? fmtMs(timeA||timeB)
+      : `<span class="diff-old">${fmtMs(timeA)}</span> <span class="diff-arrow">→</span> <span class="diff-new">${fmtMs(timeB)}</span>`;
+
+    const sizeCell = r.status === 'same' || r.status === 'added' || r.status === 'removed'
+      ? fmtBytes(sizeA != null ? sizeA : sizeB)
+      : sizeA !== sizeB
+        ? `<span class="diff-old">${fmtBytes(sizeA)}</span> <span class="diff-arrow">→</span> <span class="diff-new">${fmtBytes(sizeB)}</span>`
+        : fmtBytes(sizeB);
+
+    html += `<tr class="${r.status}" data-idx="${i}">
+      <td><span class="badge badge-${r.status}">${r.status}</span></td>
+      <td><span class="method method-${escHtml(method)}">${escHtml(method)}</span></td>
+      <td class="url-cell" title="${escHtml(url)}">${escHtml(path)}</td>
+      <td class="num-cell">${statusCell}</td>
+      <td class="num-cell">${timeCell}</td>
+      <td class="num-cell">${sizeCell}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+function setSort(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = 1; }
+  renderTable();
+}
+
+// ── Detail panel ──────────────────────────────────────────────────────────────
+
+function openDetail(row) {
+  currentRow = row;
+  const e = row.b || row.a;
+  document.getElementById('detail-url').textContent = e.request.url;
+  document.getElementById('detail-panel').classList.add('open');
+  renderDetail();
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+  currentRow = null;
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.detail-tab').forEach((t, i) => {
+    t.classList.toggle('active', ['overview','headers','body','timings'][i] === tab);
+  });
+  renderDetail();
+}
+
+function renderDetail() {
+  if (!currentRow) return;
+  const r = currentRow;
+  const body = document.getElementById('detail-body');
+
+  if (currentTab === 'overview')  body.innerHTML = renderOverview(r);
+  else if (currentTab === 'headers') body.innerHTML = renderHeaders(r);
+  else if (currentTab === 'body') body.innerHTML = renderBody(r);
+  else if (currentTab === 'timings') body.innerHTML = renderTimings(r);
+}
+
+function diffField(label, va, vb) {
+  if (va === vb) {
+    return `<div class="diff-line"><span class="key">${label}</span><span class="val-same">${escHtml(String(va ?? '—'))}</span></div>`;
+  }
+  return `<div class="diff-line"><span class="key">${label}</span><span class="val-a">${escHtml(String(va ?? '—'))}</span><span class="val-b">${escHtml(String(vb ?? '—'))}</span></div>`;
+}
+
+function renderOverview(r) {
+  const a = r.a, b = r.b;
+  const e = b || a;
+
+  let html = `<div class="diff-block"><h4>Request</h4>`;
+  html += diffField('Method', a?.request.method, b?.request.method);
+  html += diffField('URL', a?.request.url, b?.request.url);
+  html += `</div>`;
+
+  html += `<div class="diff-block"><h4>Response</h4>`;
+  html += diffField('Status', a?.response.status, b?.response.status);
+  html += diffField('Status Text', a?.response.statusText, b?.response.statusText);
+  html += diffField('Body Size', fmtBytes(a?.response.bodySize), fmtBytes(b?.response.bodySize));
+  html += diffField('Transfer Size', fmtBytes(a?.response._transferSize ?? a?.response.headersSize + a?.response.bodySize), fmtBytes(b?.response._transferSize ?? b?.response.headersSize + b?.response.bodySize));
+  html += `</div>`;
+
+  html += `<div class="diff-block"><h4>Timing</h4>`;
+  html += diffField('Total Time', fmtMs(a?.time), fmtMs(b?.time));
+  html += `</div>`;
+
+  if (r.status === 'same') html += `<div class="no-diff">No differences detected.</div>`;
+
+  return html;
+}
+
+function renderHeaders(r) {
+  const hReqA = headersMap(r.a, 'request'), hReqB = headersMap(r.b, 'request');
+  const hResA = headersMap(r.a, 'response'), hResB = headersMap(r.b, 'response');
+
+  function section(label, mA, mB) {
+    const all = new Set([...Object.keys(mA), ...Object.keys(mB)]);
+    if (!all.size) return '';
+    let s = `<div class="diff-block"><h4>${label}</h4>`;
+    for (const k of [...all].sort()) {
+      s += diffField(k, mA[k], mB[k]);
+    }
+    s += '</div>';
+    return s;
+  }
+
+  return section('Request Headers', hReqA, hReqB) + section('Response Headers', hResA, hResB) || '<div class="no-diff">No headers.</div>';
+}
+
+function renderBody(r) {
+  const bodyReqA = getBody(r.a, 'request'), bodyReqB = getBody(r.b, 'request');
+  const bodyResA = getBody(r.a, 'response'), bodyResB = getBody(r.b, 'response');
+
+  let html = '';
+
+  if (bodyReqA || bodyReqB) {
+    html += `<div class="diff-block"><h4>Request Body</h4>`;
+    html += lineDiff(bodyReqA, bodyReqB);
+    html += `</div>`;
+  }
+
+  if (bodyResA || bodyResB) {
+    html += `<div class="diff-block"><h4>Response Body</h4>`;
+    html += lineDiff(bodyResA, bodyResB);
+    html += `</div>`;
+  }
+
+  if (!html) html = '<div class="no-diff">No body content.</div>';
+  return html;
+}
+
+function lineDiff(textA, textB) {
+  if (textA === textB) return '<div class="no-diff">Identical</div>';
+
+  // Try pretty-print JSON
+  let a = tryPretty(textA), b = tryPretty(textB);
+
+  const linesA = a.split('\n');
+  const linesB = b.split('\n');
+
+  // Simple LCS-based diff
+  const diff = computeDiff(linesA, linesB);
+  let html = '<pre class="body-diff">';
+  for (const [type, line] of diff) {
+    const cls = type === '+' ? 'line-added' : type === '-' ? 'line-removed' : '';
+    const prefix = type === '+' ? '+ ' : type === '-' ? '- ' : '  ';
+    html += `<span class="${cls}">${escHtml(prefix + line)}\n</span>`;
+  }
+  html += '</pre>';
+  return html;
+}
+
+function tryPretty(text) {
+  try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text || ''; }
+}
+
+function computeDiff(a, b) {
+  // Myers diff (simplified patience-style via LCS)
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
+  for (let i = m-1; i >= 0; i--)
+    for (let j = n-1; j >= 0; j--)
+      dp[i][j] = a[i] === b[j] ? 1 + dp[i+1][j+1] : Math.max(dp[i+1][j], dp[i][j+1]);
+
+  const result = [];
+  let i = 0, j = 0;
+  while (i < m || j < n) {
+    if (i < m && j < n && a[i] === b[j]) {
+      result.push([' ', a[i]]); i++; j++;
+    } else if (j < n && (i >= m || dp[i+1][j] >= dp[i][j+1])) {
+      result.push(['+', b[j]]); j++;
+    } else {
+      result.push(['-', a[i]]); i++;
+    }
+  }
+  return result;
+}
+
+function renderTimings(r) {
+  const keys = ['blocked','dns','connect','ssl','send','wait','receive'];
+
+  function row(label, tA, tB) {
+    const va = tA != null && tA >= 0 ? tA : null;
+    const vb = tB != null && tB >= 0 ? tB : null;
+    if (va == null && vb == null) return '';
+    return diffField(label, fmtMs(va), fmtMs(vb));
+  }
+
+  const timA = r.a?.timings || {}, timB = r.b?.timings || {};
+
+  let html = '<div class="diff-block"><h4>Timings</h4>';
+  for (const k of keys) html += row(k, timA[k], timB[k]);
+  html += diffField('total', fmtMs(r.a?.time), fmtMs(r.b?.time));
+  html += '</div>';
+  return html;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+
+['show-same','show-changed','show-added','show-removed','group-by'].forEach(id =>
+  document.getElementById(id).addEventListener('change', () => { if (harA && harB) renderTable(); })
+);
+
+document.getElementById('url-filter').addEventListener('input', () => { if (harA && harB) renderTable(); });
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+</script>
+</body>
+</html>
