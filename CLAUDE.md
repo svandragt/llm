@@ -1,37 +1,22 @@
 # Skills Reference Library
 
-A collection of reusable Claude Code skill prompts.
+A collection of reusable Claude Code skill prompts. See `README.md` for user-facing structure, validation, packaging, and installation details.
 
-## Structure
+## Working in this repo
 
-```
-skills/<name>/SKILL.md
-```
+- Skills live as self-contained directories under `skills/<name>/SKILL.md`.
+- After adding, renaming, or removing a skill, **also update the Skills table in `README.md`** (keep it alphabetical) and re-run `bin/link-skills.sh` to expose changes in `~/.claude/skills/`.
+- `bin/manage-skills.sh` is an `fzf` TUI for toggling individual skills on/off (enable = repo symlink in `~/.claude/skills/`; disable = remove the symlink).
 
-Each skill is a self-contained directory. `SKILL.md` requires YAML frontmatter:
+## Skills NOT owned by this repo
 
-```yaml
----
-name: skill-name          # lowercase, hyphens only, max 64 chars
-description: "..."        # max 200 chars — quote if it contains colons
----
-```
+Some entries in `~/.claude/skills/` are sourced externally and must **not** be added back to `skills/`:
+
+- `park` — upstream at https://github.com/svandragt/park (lives as a real local dir).
+- `hm-coding-standards` — work-internal, manually copied into `~/.claude/skills/`.
+
+`bin/link-skills.sh` ignores these because they aren't symlinks it manages.
 
 ## Validation
 
-Run `skills-ref validate` to check all skills for missing or malformed frontmatter before packaging.
-
-## Packaging
-
-Create a zip per skill with the skill directory as the root inside the archive:
-
-```sh
-python3 -c "
-import zipfile
-name = 'skill-name'
-with zipfile.ZipFile(f'{name}.zip', 'w') as z:
-    z.write(f'skills/{name}/SKILL.md', f'{name}/SKILL.md')
-"
-```
-
-Zip files are excluded from git (see `.gitignore`).
+`skills validate skills/<name>` (from [skills-cli](https://pypi.org/project/skills-cli/)) — checks frontmatter before packaging.
