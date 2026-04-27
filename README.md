@@ -53,6 +53,10 @@ The script is idempotent — re-run it after pulling new skills. It refuses to o
 
 Skills scoped to a single project should live in that project's own `.claude/skills/` instead — Claude Code picks them up automatically when working in that directory.
 
+### Enabling/disabling individual skills
+
+`bin/manage-skills.sh` opens an `fzf` TUI listing every skill in this repo with its current state (`[x]` enabled, `[ ]` disabled, `[!]` foreign — untouched). Press enter to toggle, esc to quit. Requires `fzf`.
+
 ## Validation
 
 Install [skills-cli](https://pypi.org/project/skills-cli/) and run `skills validate skills/<name>` to check a skill for missing or malformed frontmatter before packaging.
