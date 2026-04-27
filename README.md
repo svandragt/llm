@@ -6,7 +6,13 @@ A personal library of reusable [Claude Code](https://claude.ai/claude-code) skil
 
 | Skill | Description |
 |---|---|
+| `changelog-compiler` | Compile `.changelog/*.md` entries into `CHANGELOG.md` for a new release version, then delete the individual files |
+| `ci-action-pinner` | Update GitHub Actions `uses:` SHA pins to their latest versions without touching build tool versions |
+| `composer-lock-sync` | After resolving a `composer.lock` merge conflict, run `composer update --lock`, validate, and audit |
+| `dependency-update-review` | Review pending npm and Composer dependency bump commits/PRs and report whether each is safe to merge |
 | `explain-code` | Explains code with visual diagrams and analogies |
+| `lessons` | Capture concepts the user is learning as numbered lesson files under `.lessons/` |
+| `park` | Park context for later and resume parked items by number |
 | `php-pre-commit-setup` | Install a pre-commit git hook that runs `composer lint` and `composer analyse` before every commit |
 | `php-quality` | Run the full PHP quality gate: auto-fix linting, static analysis, unit tests, and coverage check |
 | `php-tdd` | Enforce red-green TDD for PHP: write a failing test first, confirm failure, implement minimum code, confirm green |
@@ -46,7 +52,7 @@ Claude Code will now discover all skills in this repo automatically, regardless 
 
 ## Validation
 
-Run `skills-ref validate` to check all skills for missing or malformed frontmatter before packaging.
+Install [skills-cli](https://pypi.org/project/skills-cli/) and run `skills validate skills/<name>` to check a skill for missing or malformed frontmatter before packaging.
 
 ## Packaging
 
