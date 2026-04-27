@@ -11,6 +11,7 @@ A personal library of reusable [Claude Code](https://claude.ai/claude-code) skil
 | `composer-lock-sync` | After resolving a `composer.lock` merge conflict, run `composer update --lock`, validate, and audit |
 | `dependency-update-review` | Review pending npm and Composer dependency bump commits/PRs and report whether each is safe to merge |
 | `explain-code` | Explains code with visual diagrams and analogies |
+| `hm-coding-standards` | Set up and enforce Human Made (HM) coding standards in a WordPress plugin |
 | `lessons` | Capture concepts the user is learning as numbered lesson files under `.lessons/` |
 | `park` | Park context for later and resume parked items by number |
 | `php-pre-commit-setup` | Install a pre-commit git hook that runs `composer lint` and `composer analyse` before every commit |
@@ -19,6 +20,7 @@ A personal library of reusable [Claude Code](https://claude.ai/claude-code) skil
 | `python-tdd` | Red-green TDD cycle for Python using pytest, then lint with ruff |
 | `review-docs` | After user-facing changes, review `docs/` for pages that need updating and missing cross-links |
 | `smoke-test` | Build a smoke-test document proving a new feature works end-to-end |
+| `wp-plugin-tdd` | Enforce red-green TDD for WordPress plugins using Brain Monkey and Mockery |
 
 ## Structure
 
@@ -68,3 +70,7 @@ with zipfile.ZipFile(f'{name}.zip', 'w') as z:
 ```
 
 Zip files are excluded from git (see `.gitignore`), and can be uploaded to https://claude.ai/customize/skills to make them available to Claude AI.
+
+## License
+
+[GPL-3.0](LICENSE).
