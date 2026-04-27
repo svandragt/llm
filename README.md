@@ -11,9 +11,7 @@ A personal library of reusable [Claude Code](https://claude.ai/claude-code) skil
 | `composer-lock-sync` | After resolving a `composer.lock` merge conflict, run `composer update --lock`, validate, and audit |
 | `dependency-update-review` | Review pending npm and Composer dependency bump commits/PRs and report whether each is safe to merge |
 | `explain-code` | Explains code with visual diagrams and analogies |
-| `hm-coding-standards` | Set up and enforce Human Made (HM) coding standards in a WordPress plugin |
 | `lessons` | Capture concepts the user is learning as numbered lesson files under `.lessons/` |
-| `park` | Park context for later and resume parked items by number |
 | `php-pre-commit-setup` | Install a pre-commit git hook that runs `composer lint` and `composer analyse` before every commit |
 | `php-quality` | Run the full PHP quality gate: auto-fix linting, static analysis, unit tests, and coverage check |
 | `php-tdd` | Enforce red-green TDD for PHP: write a failing test first, confirm failure, implement minimum code, confirm green |
@@ -37,20 +35,24 @@ description: "..."        # max 200 chars — quote if it contains colons
 ---
 ```
 
+After adding a new skill directory, re-run `bin/link-skills.sh` to expose it globally.
+
 ## Installation
 
-Make the skills available to Claude Code across all local projects by symlinking this repo's `skills/` directory to `~/.claude/skills`:
+`~/.claude/skills/` is the directory Claude Code loads global skills from. Rather than symlinking the whole directory to this repo (which forces every globally available skill to live here), use `bin/link-skills.sh` to create one symlink *per skill* into `~/.claude/skills/`:
 
 ```sh
-# If ~/.claude/skills already exists, move any existing skills into this repo first
-mv ~/.claude/skills/my-existing-skill /path/to/this/repo/skills/
-
-# Remove the directory and replace it with a symlink
-rmdir ~/.claude/skills
-ln -s /path/to/this/repo/skills ~/.claude/skills
+git clone https://github.com/svandragt/llm.git ~/dev/llm
+~/dev/llm/bin/link-skills.sh
 ```
 
-Claude Code will now discover all skills in this repo automatically, regardless of which project you're working in.
+The script is idempotent — re-run it after pulling new skills. It refuses to overwrite anything it doesn't already manage, so the directory can hold a mix of:
+
+- symlinks managed by this script (skills from this repo),
+- real directories written by third-party tools that ship their own Claude skill and install it globally,
+- additional symlinks you create by hand pointing into other source repos (e.g. a work repo's `skills/`).
+
+Skills scoped to a single project should live in that project's own `.claude/skills/` instead — Claude Code picks them up automatically when working in that directory.
 
 ## Validation
 
