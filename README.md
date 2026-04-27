@@ -6,7 +6,6 @@ A personal library of reusable [Claude Code](https://claude.ai/claude-code) skil
 
 | Skill | Description |
 |---|---|
-| `changelog-compiler` | Compile `.changelog/*.md` entries into `CHANGELOG.md` for a new release version, then delete the individual files |
 | `ci-action-pinner` | Update GitHub Actions `uses:` SHA pins to their latest versions without touching build tool versions |
 | `composer-lock-sync` | After resolving a `composer.lock` merge conflict, run `composer update --lock`, validate, and audit |
 | `dependency-update-review` | Review pending npm and Composer dependency bump commits/PRs and report whether each is safe to merge |
