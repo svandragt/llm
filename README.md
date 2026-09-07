@@ -9,6 +9,7 @@ A personal library of reusable [Claude Code](https://claude.ai/claude-code) skil
 | `ci-action-pinner` | Update GitHub Actions `uses:` SHA pins to their latest versions without touching build tool versions |
 | `composer-lock-sync` | After resolving a `composer.lock` merge conflict, run `composer update --lock`, validate, and audit |
 | `dependency-update-review` | Review pending npm and Composer dependency bump commits/PRs and report whether each is safe to merge |
+| `editor` | Edits rough notes into a publishable message from the provided source only — no new facts or topics |
 | `explain-code` | Explains code with visual diagrams and analogies |
 | `lessons` | Capture concepts the user is learning as numbered lesson files under `.lessons/` |
 | `php-pre-commit-setup` | Install a pre-commit git hook that runs `composer lint` and `composer analyse` before every commit |

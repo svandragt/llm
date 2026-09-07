@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# link-open — sweep this repo's open PRs and link each to its Zenhub ticket.
+#
+# Ticket number = leading digits of the branch name, else of the PR title.
+# Skips PRs with no number, non-existent tickets, and PRs already connected.
+# Dry-run by default; pass --apply to actually create the connections.
+#
+# Usage: link-open [--apply] [owner/repo]   (repo defaults to the git remote)
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ZH="$DIR/zh"
+TICKET_REPO="humanmade/Wikimedia"   # where the Zenhub-tracked issues live
+
+APPLY=0
+REPO=""
+for a in "$@"; do
+  case "$a" in
+    --apply) APPLY=1 ;;
+    */*) REPO="$a" ;;
+    *) echo "link-open: unknown arg '$a'" >&2; exit 2 ;;
+  esac
+done
+[ -n "$REPO" ] || REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+
+# connected PR numbers already on an issue node -> stdout, one per line
+connected_prs() {
+  "$ZH" _raw 'query($g:ID!){node(id:$g){... on Issue{connectedPrs{nodes{number}}}}}' \
+    "$(jq -nc --arg g "$1" '{g:$g}')" 2>/dev/null \
+    | jq -r '.data.node.connectedPrs.nodes[]?.number' 2>/dev/null || true
+}
+
+echo "Sweeping open PRs in $REPO  (mode: $([ $APPLY = 1 ] && echo APPLY || echo dry-run))"
+gh pr list --repo "$REPO" --state open --json number,title,headRefName \
+  -q '.[] | [.number, .headRefName, .title] | @tsv' \
+| while IFS=$'\t' read -r pr branch title; do
+    num="$(printf '%s' "$branch" | grep -oE '^[0-9]{2,}' || true)"
+    [ -n "$num" ] || num="$(printf '%s' "$title" | grep -oE '^[0-9]{2,}' || true)"
+    if [ -z "$num" ]; then echo "  PR #$pr  — no ticket number, skip"; continue; fi
+
+    issue_json="$("$ZH" resolve-issue "$TICKET_REPO" "$num" 2>/dev/null || true)"
+    issue_id="$(printf '%s' "$issue_json" | jq -r '.id // empty' 2>/dev/null || true)"
+    if [ -z "$issue_id" ]; then echo "  PR #$pr → #$num  — ticket not found, skip"; continue; fi
+
+    if connected_prs "$issue_id" | grep -qx "$pr"; then
+      echo "  PR #$pr → #$num  — already linked"; continue
+    fi
+
+    if [ $APPLY = 1 ]; then
+      pr_id="$("$ZH" resolve-pr "$REPO" "$pr" | jq -r .id)"
+      "$ZH" connect "$issue_id" "$pr_id" >/dev/null
+      echo "  PR #$pr → #$num  — LINKED"
+    else
+      echo "  PR #$pr → #$num  — would link"
+    fi
+  done

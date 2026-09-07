@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# zh — thin Zenhub GraphQL helper for the ticket-progression skill.
+#
+# Auth: $ZENHUB_TOKEN, else first line of ~/.config/zenhub/token.
+# Endpoint: https://api.zenhub.com/public/graphql
+#
+# Zenhub's public GraphQL schema is confirmed live by `zh discover` (introspection),
+# not guessed — the exact connect/move mutation names land in cache.json and the
+# action subcommands read them from there. Defaults below are best-effort starting
+# points that discover overwrites with what the API actually exposes.
+set -euo pipefail
+
+ENDPOINT="https://api.zenhub.com/public/graphql"
+CACHE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cache.json"
+
+die() { echo "zh: $*" >&2; exit 1; }
+
+token() {
+  if [ -n "${ZENHUB_TOKEN:-}" ]; then printf '%s' "$ZENHUB_TOKEN"; return; fi
+  if [ -f "$HOME/.config/zenhub/token" ]; then head -n1 "$HOME/.config/zenhub/token"; return; fi
+  die "no token: set \$ZENHUB_TOKEN or write ~/.config/zenhub/token (see the skill's setup steps)"
+}
+
+# gql <query> [variables-json] -> raw response JSON on stdout; fails on GraphQL errors.
+gql() {
+  local q="$1" vars="${2:-}" resp
+  [ -n "$vars" ] || vars='{}'
+  resp="$(jq -nc --arg q "$q" --argjson v "$vars" '{query:$q, variables:$v}' \
+    | curl -fsS -X POST "$ENDPOINT" \
+        -H "Authorization: Bearer $(token)" \
+        -H "Content-Type: application/json" \
+        --data @-)"
+  if printf '%s' "$resp" | jq -e '.errors' >/dev/null 2>&1; then
+    echo "$resp" | jq -c '.errors' >&2
+    die "GraphQL errors (see above)"
+  fi
+  printf '%s' "$resp"
+}
+
+cache_get() { [ -f "$CACHE" ] && jq -er "$1" "$CACHE" 2>/dev/null; }
+
+# ---- subcommands -----------------------------------------------------------
+
+# discover [workspaceId] — introspect the schema, confirm mutation/field names,
+# and (if a workspace id is given) cache its pipelines and attached repos.
+cmd_discover() {
+  local ws="${1:-}"
+  # Confirm the connect / move mutations exist in the live schema, then pin the exact
+  # names (a loose grep picks sibling mutations like addProjectsToRoadmap / moveAllPipelineIssues).
+  local introspect muts connect_mut move_mut
+  introspect="$(gql 'query{__type(name:"Mutation"){fields{name}}}')"
+  muts="$(printf '%s' "$introspect" | jq -r '.data.__type.fields[].name')"
+  connect_mut="$(printf '%s\n' "$muts" | grep -Fx 'createIssuePrConnection' || true)"
+  move_mut="$(printf '%s\n' "$muts" | grep -Fx 'moveIssue' || true)"
+
+  local pipelines='[]' repos='[]'
+  if [ -n "$ws" ]; then
+    local wsdata
+    wsdata="$(gql 'query($w:ID!){workspace(id:$w){id name pipelinesConnection(first:50){nodes{id name}} repositoriesConnection(first:100){nodes{id ghId name owner{login}}}}}' \
+      "$(jq -nc --arg w "$ws" '{w:$w}')")"
+    pipelines="$(printf '%s' "$wsdata" | jq -c '.data.workspace.pipelinesConnection.nodes')"
+    repos="$(printf '%s' "$wsdata" | jq -c '[.data.workspace.repositoriesConnection.nodes[]|{ghId, slug:(.owner.login+"/"+.name)}]')"
+  fi
+
+  jq -n \
+    --arg ws "$ws" \
+    --arg connect "$connect_mut" \
+    --arg move "$move_mut" \
+    --argjson mutations "$(printf '%s\n' "$muts" | jq -R . | jq -sc .)" \
+    --argjson pipelines "$pipelines" \
+    --argjson repos "$repos" \
+    '{workspaceId:$ws, connectMutation:$connect, moveMutation:$move,
+      pipelines:$pipelines, repos:$repos, mutationNames:$mutations}' \
+    | tee "$CACHE"
+  echo "zh: wrote $CACHE" >&2
+}
+
+# resolve-issue <owner/repo> <number> — Zenhub node id for a GitHub issue/PR.
+# Works for PRs too (GitHub PRs are issues); discover confirms if a distinct
+# pullRequestByInfo is needed.
+cmd_resolve() {
+  local slug="$1" num="$2" ghId
+  ghId="$(gh api "repos/$slug" --jq .id)"
+  gql 'query($g:Int!,$n:Int!){issueByInfo(repositoryGhId:$g,issueNumber:$n){id number title pullRequest}}' \
+    "$(jq -nc --argjson g "$ghId" --argjson n "$num" '{g:$g,n:$n}')" \
+    | jq -c '.data.issueByInfo'
+}
+
+# pipelines <workspaceId> — {name -> id}
+cmd_pipelines() {
+  gql 'query($w:ID!){workspace(id:$w){pipelinesConnection(first:50){nodes{id name}}}}' \
+    "$(jq -nc --arg w "$1" '{w:$w}')" \
+    | jq -c '[.data.workspace.pipelinesConnection.nodes[]|{(.name):.id}]|add'
+}
+
+# connect <issueNodeId> <prNodeId> — create the PR<->issue connection.
+cmd_connect() {
+  local mut; mut="$(cache_get '.connectMutation' || true)"
+  [ -n "${mut:-}" ] && [ "$mut" != "null" ] || die "connect mutation not discovered; run: zh discover"
+  # Input shape confirmed by discover's introspection dump (mutationNames + args).
+  gql "mutation(\$i:${mut^}Input!){${mut}(input:\$i){clientMutationId}}" \
+    "$(jq -nc --arg issue "$1" --arg pr "$2" '{i:{issueId:$issue, pullRequestId:$pr}}')"
+}
+
+# move <issueNodeId> <pipelineNodeId> — forward pipeline move (stage 2).
+# MoveIssueInput is {pipelineId, issueId, position:Int}; no workspaceId. position omitted = end.
+cmd_move() {
+  local mut; mut="$(cache_get '.moveMutation' || true)"
+  [ -n "${mut:-}" ] && [ "$mut" != "null" ] || die "move mutation not discovered; run: zh discover"
+  gql "mutation(\$i:${mut^}Input!){${mut}(input:\$i){clientMutationId}}" \
+    "$(jq -nc --arg issue "$1" --arg pl "$2" '{i:{issueId:$issue, pipelineId:$pl}}')"
+}
+
+cmd_self_check() {
+  token >/dev/null || die "token check failed"
+  cmd_discover "${1:-}" >/dev/null
+  local ws; ws="$(cache_get '.workspaceId' || true)"
+  if [ -n "${1:-}" ]; then
+    [ -n "$ws" ] || die "self-check: no workspaceId cached"
+    [ "$(cache_get '.pipelines|length')" -ge 1 ] || die "self-check: no pipelines cached"
+    cache_get '.repos' >/dev/null || die "self-check: no repo list cached"
+  fi
+  [ "$(cache_get '.connectMutation')" != "null" ] || echo "self-check: WARNING connect mutation not found by introspection" >&2
+  echo "self-check OK"
+}
+
+case "${1:-}" in
+  discover)      shift; cmd_discover "$@" ;;
+  resolve-issue|resolve-pr) shift; cmd_resolve "$@" ;;
+  pipelines)     shift; cmd_pipelines "$@" ;;
+  connect)       shift; cmd_connect "$@" ;;
+  move)          shift; cmd_move "$@" ;;
+  _raw)          shift; gql "$@" ;;
+  --self-check)  shift; cmd_self_check "$@" ;;
+  *) die "usage: zh {discover [wsId]|resolve-issue OWNER/REPO N|resolve-pr OWNER/REPO N|pipelines wsId|connect issueId prId|move issueId pipelineId|--self-check [wsId]}" ;;
+esac

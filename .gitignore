@@ -1,2 +1,6 @@
 *.zip
 .lessons/
+prompt-relay/
+tools/shrinko8/
+skills/ticket-progression/state/
+skills/ticket-progression/cache.json

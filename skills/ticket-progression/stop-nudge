@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Stop-hook nudge: once per session per PR, remind to link an open PR to its
+# Zenhub ticket. Cheap + local (no Zenhub calls). Fail-silent; always exits 0.
+# Emits a {"systemMessage":...} on stdout only when it wants to nudge.
+
+input="$(cat 2>/dev/null || true)"
+sid="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)"
+
+# Only in Wikimedia-family repos; bail instantly everywhere else.
+slug="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+case "$slug" in
+  wikimedia/*|humanmade/*|wpcomvip/*) : ;;
+  *) exit 0 ;;
+esac
+
+# Open PR for the current branch, else nothing to nudge.
+prjson="$(gh pr view --json number,title,state 2>/dev/null || true)"
+[ -n "$prjson" ] || exit 0
+[ "$(printf '%s' "$prjson" | jq -r '.state // empty')" = "OPEN" ] || exit 0
+pr="$(printf '%s' "$prjson" | jq -r '.number')"
+title="$(printf '%s' "$prjson" | jq -r '.title')"
+
+# Ticket number: branch prefix, else PR-title prefix.
+branch="$(git branch --show-current 2>/dev/null || true)"
+num="$(printf '%s' "$branch" | grep -oE '^[0-9]{2,}' || true)"
+[ -n "$num" ] || num="$(printf '%s' "$title" | grep -oE '^[0-9]{2,}' || true)"
+[ -n "$num" ] || exit 0
+
+# Session suppression: nudge each PR at most once per session. Prune stale markers.
+mdir="$HOME/.claude/skills/ticket-progression/state"
+mkdir -p "$mdir" 2>/dev/null || true
+find "$mdir" -type f -mtime +1 -delete 2>/dev/null || true
+marker="$mdir/${sid:-nosession}-${slug//\//_}-$pr"
+[ -e "$marker" ] && exit 0
+: > "$marker" 2>/dev/null || true
+
+printf '{"systemMessage":"🎫 PR #%s may not be linked to ticket #%s — run the ticket-progression skill (or link-open) to connect it."}' "$pr" "$num"
